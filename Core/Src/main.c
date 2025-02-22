@@ -104,6 +104,7 @@ int main(void)
   ssd1306_Fill(White);
   ssd1306_UpdateScreen();
   HAL_UART_Transmit(&huart2, (uint8_t *)"Hello World!\r\n", 14, 100);
+  HAL_UART_Transmit(&huart2, (uint8_t *)"Prueba\r\n", 14, 100);
   /* USER CODE END 2 */
 
   /* Infinite loop */
