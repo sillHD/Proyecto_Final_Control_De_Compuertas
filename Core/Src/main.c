@@ -21,6 +21,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdio.h>
+#include <string.h>
 #include "ssd1306.h"
 #include "ssd1306_fonts.h"
 #include "locked.h"
@@ -74,10 +76,6 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-  ssd1306_Init();
-  ssd1306_Fill(White);
-  ssd1306_UpdateScreen();
-  HAL_UART_Transmit(&huart3, (uint8_t *)"Hello World!\r\n", 14, 100);
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -102,7 +100,10 @@ int main(void)
   MX_USART3_UART_Init();
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
-
+  ssd1306_Init();
+  ssd1306_Fill(White);
+  ssd1306_UpdateScreen();
+  HAL_UART_Transmit(&huart2, (uint8_t *)"Hello World!\r\n", 14, 100);
   /* USER CODE END 2 */
 
   /* Infinite loop */
