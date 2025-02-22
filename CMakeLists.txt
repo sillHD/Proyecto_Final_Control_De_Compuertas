@@ -47,11 +47,18 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+    External/ssd1306/ssd1306.c
+    External/ssd1306/ssd1306_fonts.c
+    Core/Src/button.c
+    Core/Src/ring_buffer.c
     # Add user sources here
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+    External/ssd1306
+    Drivers/keypad
+    Assets
     # Add user defined include paths
 )
 
