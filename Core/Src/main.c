@@ -84,7 +84,58 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
+  void process_command(ring_buffer_t *rb, uint8_t *buffer, char *state) {
+    if (ring_buffer_size(rb) == 5) {  // Verifica si el comando es de longitud 5
+        // Lee el comando completo del buffer
+        for (int i = 0; i < 5; i++) {
+            ring_buffer_read(rb, &buffer[i]);
+        }
+        buffer[5] = '\0';  // Asegura el término del string
 
+        // Procesa el comando basado en su contenido
+        if (strcmp((char *)buffer, "#*A*#") == 0) {
+            if (strcmp(state, "Op") == 0) {
+                HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta ya esta abierta\r\n", 26, 100);
+            } else {
+                HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);  // Cambia el estado del LED
+                HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta Abierta\r\n", 17, 100);
+                strcpy(state, "Op");
+            }
+        } else if (strcmp((char *)buffer, "#*C*#") == 0) {
+            if (strcmp(state, "Cl") == 0) {
+                HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta ya esta cerrada\r\n", 27, 100);
+            } else {
+                HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);  // Cambia el estado del LED
+                HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta Cerrada\r\n", 17, 100);
+                strcpy(state, "Cl");
+            }
+        } else if (strcmp((char *)buffer, "#*1*#") == 0) {
+            if (strcmp(state, "Cl") == 0) {
+                HAL_UART_Transmit(&huart2, (uint8_t *)"Estado de la puerta:Cerrada\r\n", 36, 100);
+            } else {
+                HAL_UART_Transmit(&huart2, (uint8_t *)"Estado de la puerta:Abierta\r\n", 36, 100);
+            }
+        } else if (strcmp((char *)buffer, "#*0*#") == 0) {
+            HAL_UART_Transmit(&huart2, (uint8_t *)"Buffer limpiado y puerta cerrada\r\n", 38, 100);
+            ring_buffer_reset(rb);
+            strcpy(state, "Cl");
+            HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+            HAL_Delay(500);
+            HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+            HAL_Delay(500);
+            HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+            HAL_Delay(500);
+            HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+        } else {
+            HAL_UART_Transmit(&huart2, (uint8_t *)"Comando no reconocido\r\n", 24, 100);
+        }
+
+        // Reinicia el buffer de comando
+        for (int i = 0; i < 5; i++) {
+            buffer[i] = '_';
+        }
+    }
+  }
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -100,11 +151,29 @@ int main(void)
   MX_USART3_UART_Init();
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
+  initialise_monitor_handles();  // Inicializa el monitor de depuración
+  setvbuf(stdout, NULL, _IONBF, 0);  // Desactiva el buffer de stdout
   ssd1306_Init();
   ssd1306_Fill(White);
   ssd1306_UpdateScreen();
   HAL_UART_Transmit(&huart2, (uint8_t *)"Hello World!\r\n", 14, 100);
   HAL_UART_Transmit(&huart2, (uint8_t *)"Prueba\r\n", 14, 100);
+  ring_buffer_t rb_matrix;
+  ring_buffer_t rb_pc;
+  uint8_t buffer_matrix[5];  // Buffer de tamaño 10 para almacenar el comando completo
+  uint8_t buffer_pc[5];
+  for (int i = 0; i < sizeof(buffer_matrix); i++) {
+    buffer_matrix[i] = '_';
+    buffer_pc[i] = '_';
+  }  
+  keypad_init();  // Inicializa el teclado matricial
+  ring_buffer_init(&rb_matrix, buffer_matrix, 5);  // Inicializa el ring buffer
+  ring_buffer_init(&rb_pc, buffer_pc, 5);
+  HAL_UART_Transmit(&huart2, (uint8_t *)"Hello World\r\n\0", 20, 100);  // Envía el mensaje "Hello World"
+
+  uint8_t key;  // Variable para almacenar la tecla presionada desde el teclado matricial
+  uint8_t pc_key;  // Variable para recibir teclas desde la PC
+  char state[3] = "Cl";
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -112,7 +181,32 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+    if (column_pressed != 0 && (key_pressed_tick + 5) < HAL_GetTick()) {
+      key = keypad_scan(column_pressed);
+      column_pressed = 0;
+      if (key != 'E') {
+          ring_buffer_write(&rb_matrix, key);
+          uint8_t size = ring_buffer_size(&rb_matrix);
+          char msg[45];
+          snprintf(msg, sizeof(msg), "Key: %c, Buffer: %s, Size: %d\r\n", key, buffer_matrix, size);
+          HAL_UART_Transmit(&huart2, (uint8_t *)msg, strlen(msg), 100);
+      }
+    }
 
+  // Procesa teclas recibidas desde la PC
+  if (HAL_UART_Receive(&huart2, &pc_key, 1, 10) == HAL_OK) {
+      ring_buffer_write(&rb_pc, pc_key);
+      uint8_t size = ring_buffer_size(&rb_pc);
+      char msg[45];
+      snprintf(msg, sizeof(msg), "PC Key: %c, Buffer: %s, Size: %d\r\n", pc_key, buffer_pc, size);
+      HAL_UART_Transmit(&huart2, (uint8_t *)msg, strlen(msg), 100);
+  }
+
+  // Procesa comandos para ambos buffers
+  process_command(&rb_matrix, buffer_matrix, state);
+  process_command(&rb_pc, buffer_pc, state);
+
+  HAL_Delay(100);
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
