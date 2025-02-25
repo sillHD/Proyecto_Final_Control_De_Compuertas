@@ -23,9 +23,11 @@
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
 #include <string.h>
+#include "keypad.h"
 #include "ssd1306.h"
 #include "ssd1306_fonts.h"
 #include "locked.h"
+#include "ring_buffer.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -65,7 +67,19 @@ static void MX_I2C1_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+uint32_t key_pressed_tick = 0;
+uint16_t column_pressed = 0;
 
+uint32_t debounce_tick = 0;
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  if ((debounce_tick + 200) > HAL_GetTick()) {
+    return;
+  }
+  debounce_tick = HAL_GetTick();
+  key_pressed_tick = HAL_GetTick();
+  column_pressed = GPIO_Pin;
+}
 /* USER CODE END 0 */
 
 /**
@@ -76,14 +90,6 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-  /* USER CODE END 1 */
-
-  /* MCU Configuration--------------------------------------------------------*/
-
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
-
-  /* USER CODE BEGIN Init */
   void process_command(ring_buffer_t *rb, uint8_t *buffer, char *state) {
     if (ring_buffer_size(rb) == 5) {  // Verifica si el comando es de longitud 5
         // Lee el comando completo del buffer
@@ -136,6 +142,15 @@ int main(void)
         }
     }
   }
+  /* USER CODE END 1 */
+
+  /* MCU Configuration--------------------------------------------------------*/
+
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
+
+  /* USER CODE BEGIN Init */
+  
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -153,23 +168,24 @@ int main(void)
   /* USER CODE BEGIN 2 */
   initialise_monitor_handles();  // Inicializa el monitor de depuración
   setvbuf(stdout, NULL, _IONBF, 0);  // Desactiva el buffer de stdout
-  ssd1306_Init();
-  ssd1306_Fill(White);
-  ssd1306_UpdateScreen();
-  HAL_UART_Transmit(&huart2, (uint8_t *)"Hello World!\r\n", 14, 100);
-  HAL_UART_Transmit(&huart2, (uint8_t *)"Prueba\r\n", 14, 100);
+  //ssd1306_Init();
+  //ssd1306_Fill(White);
+  //ssd1306_UpdateScreen();
   ring_buffer_t rb_matrix;
   ring_buffer_t rb_pc;
+
   uint8_t buffer_matrix[5];  // Buffer de tamaño 10 para almacenar el comando completo
   uint8_t buffer_pc[5];
+
   for (int i = 0; i < sizeof(buffer_matrix); i++) {
     buffer_matrix[i] = '_';
     buffer_pc[i] = '_';
   }  
+
   keypad_init();  // Inicializa el teclado matricial
   ring_buffer_init(&rb_matrix, buffer_matrix, 5);  // Inicializa el ring buffer
   ring_buffer_init(&rb_pc, buffer_pc, 5);
-  HAL_UART_Transmit(&huart2, (uint8_t *)"Hello World\r\n\0", 20, 100);  // Envía el mensaje "Hello World"
+  HAL_UART_Transmit(&huart2, (uint8_t *)"Hello World\r\n\0", 14, 100);  // Envía el mensaje "Hello World"
 
   uint8_t key;  // Variable para almacenar la tecla presionada desde el teclado matricial
   uint8_t pc_key;  // Variable para recibir teclas desde la PC
@@ -181,7 +197,7 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-    if (column_pressed != 0 && (key_pressed_tick + 5) < HAL_GetTick()) {
+    if (column_pressed != 0 && (key_pressed_tick + 5) < HAL_GetTick()) { // Procesa teclas del teclado matricial
       key = keypad_scan(column_pressed);
       column_pressed = 0;
       if (key != 'E') {
@@ -193,20 +209,20 @@ int main(void)
       }
     }
 
-  // Procesa teclas recibidas desde la PC
-  if (HAL_UART_Receive(&huart2, &pc_key, 1, 10) == HAL_OK) {
+   // Procesa teclas recibidas desde la PC
+   if (HAL_UART_Receive(&huart2, &pc_key, 1, 10) == HAL_OK) {
       ring_buffer_write(&rb_pc, pc_key);
       uint8_t size = ring_buffer_size(&rb_pc);
       char msg[45];
       snprintf(msg, sizeof(msg), "PC Key: %c, Buffer: %s, Size: %d\r\n", pc_key, buffer_pc, size);
       HAL_UART_Transmit(&huart2, (uint8_t *)msg, strlen(msg), 100);
-  }
+   }
 
-  // Procesa comandos para ambos buffers
-  process_command(&rb_matrix, buffer_matrix, state);
-  process_command(&rb_pc, buffer_pc, state);
+   // Procesa comandos para ambos buffers
+   process_command(&rb_matrix, buffer_matrix, state);
+   process_command(&rb_pc, buffer_pc, state);
 
-  HAL_Delay(100);
+   HAL_Delay(100);
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
