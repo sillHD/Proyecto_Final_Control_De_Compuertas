@@ -71,10 +71,13 @@ void Error_Handler(void);
 #define COLUMN_1_EXTI_IRQn EXTI15_10_IRQn
 #define COLUMN_4_Pin GPIO_PIN_7
 #define COLUMN_4_GPIO_Port GPIOC
+#define COLUMN_4_EXTI_IRQn EXTI9_5_IRQn
 #define COLUMN_2_Pin GPIO_PIN_8
 #define COLUMN_2_GPIO_Port GPIOA
+#define COLUMN_2_EXTI_IRQn EXTI9_5_IRQn
 #define COLUMN_3_Pin GPIO_PIN_9
 #define COLUMN_3_GPIO_Port GPIOA
+#define COLUMN_3_EXTI_IRQn EXTI9_5_IRQn
 #define ROW_1_Pin GPIO_PIN_10
 #define ROW_1_GPIO_Port GPIOA
 #define TMS_Pin GPIO_PIN_13

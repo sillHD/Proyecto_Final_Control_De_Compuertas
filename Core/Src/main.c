@@ -185,7 +185,7 @@ int main(void)
   keypad_init();  // Inicializa el teclado matricial
   ring_buffer_init(&rb_matrix, buffer_matrix, 5);  // Inicializa el ring buffer
   ring_buffer_init(&rb_pc, buffer_pc, 5);
-  HAL_UART_Transmit(&huart2, (uint8_t *)"Hello World\r\n\0", 14, 100);  // Envía el mensaje "Hello World"
+  HAL_UART_Transmit(&huart2, (uint8_t *)"Hello World\r\n\0", 20, 100);  // Envía el mensaje "Hello World"
 
   uint8_t key;  // Variable para almacenar la tecla presionada desde el teclado matricial
   uint8_t pc_key;  // Variable para recibir teclas desde la PC
@@ -197,7 +197,10 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-    if (column_pressed != 0 && (key_pressed_tick + 5) < HAL_GetTick()) { // Procesa teclas del teclado matricial
+
+    /* USER CODE BEGIN 3 */
+    // Procesa teclas del teclado matricial
+    if (column_pressed != 0 && (key_pressed_tick + 5) < HAL_GetTick()) {
       key = keypad_scan(column_pressed);
       column_pressed = 0;
       if (key != 'E') {
@@ -209,21 +212,20 @@ int main(void)
       }
     }
 
-   // Procesa teclas recibidas desde la PC
-   if (HAL_UART_Receive(&huart2, &pc_key, 1, 10) == HAL_OK) {
+    // Procesa teclas recibidas desde la PC
+    if (HAL_UART_Receive(&huart2, &pc_key, 1, 10) == HAL_OK) {
       ring_buffer_write(&rb_pc, pc_key);
       uint8_t size = ring_buffer_size(&rb_pc);
       char msg[45];
       snprintf(msg, sizeof(msg), "PC Key: %c, Buffer: %s, Size: %d\r\n", pc_key, buffer_pc, size);
       HAL_UART_Transmit(&huart2, (uint8_t *)msg, strlen(msg), 100);
-   }
+    }
 
    // Procesa comandos para ambos buffers
-   process_command(&rb_matrix, buffer_matrix, state);
-   process_command(&rb_pc, buffer_pc, state);
+    process_command(&rb_matrix, buffer_matrix, state);
+    process_command(&rb_pc, buffer_pc, state);
 
-   HAL_Delay(100);
-    /* USER CODE BEGIN 3 */
+    HAL_Delay(100);
   }
   /* USER CODE END 3 */
 }
@@ -464,6 +466,9 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
+
   HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
