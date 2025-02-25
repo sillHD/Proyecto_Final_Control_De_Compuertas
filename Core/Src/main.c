@@ -27,6 +27,7 @@
 #include "ssd1306.h"
 #include "ssd1306_fonts.h"
 #include "locked.h"
+#include "unlocked.h"
 #include "ring_buffer.h"
 /* USER CODE END Includes */
 
@@ -80,6 +81,59 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
   key_pressed_tick = HAL_GetTick();
   column_pressed = GPIO_Pin;
 }
+
+void process_command(ring_buffer_t *rb, uint8_t *buffer, char *state) {
+  if (ring_buffer_size(rb) == 5) {  // Verifica si el comando es de longitud 5
+      // Lee el comando completo del buffer
+      for (int i = 0; i < 5; i++) {
+          ring_buffer_read(rb, &buffer[i]);
+      }
+      buffer[5] = '\0';  // Asegura el término del string
+
+      // Procesa el comando basado en su contenido
+      if (strcmp((char *)buffer, "#*A*#") == 0) {
+          if (strcmp(state, "Op") == 0) {
+              HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta ya esta abierta\r\n", 26, 100);
+          } else {
+              HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);  // Cambia el estado del LED
+              HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta Abierta\r\n", 17, 100);
+              strcpy(state, "Op");
+          }
+      } else if (strcmp((char *)buffer, "#*C*#") == 0) {
+          if (strcmp(state, "Cl") == 0) {
+              HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta ya esta cerrada\r\n", 27, 100);
+          } else {
+              HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);  // Cambia el estado del LED
+              HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta Cerrada\r\n", 17, 100);
+              strcpy(state, "Cl");
+          }
+      } else if (strcmp((char *)buffer, "#*1*#") == 0) {
+          if (strcmp(state, "Cl") == 0) {
+              HAL_UART_Transmit(&huart2, (uint8_t *)"Estado de la puerta:Cerrada\r\n", 36, 100);
+          } else {
+              HAL_UART_Transmit(&huart2, (uint8_t *)"Estado de la puerta:Abierta\r\n", 36, 100);
+          }
+      } else if (strcmp((char *)buffer, "#*0*#") == 0) {
+          HAL_UART_Transmit(&huart2, (uint8_t *)"Buffer limpiado y puerta cerrada\r\n", 38, 100);
+          ring_buffer_reset(rb);
+          strcpy(state, "Cl");
+          HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+          HAL_Delay(500);
+          HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+          HAL_Delay(500);
+          HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+          HAL_Delay(500);
+          HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+      } else {
+          HAL_UART_Transmit(&huart2, (uint8_t *)"Comando no reconocido\r\n", 24, 100);
+      }
+
+      // Reinicia el buffer de comando
+      for (int i = 0; i < 5; i++) {
+          buffer[i] = '_';
+      }
+  }
+}
 /* USER CODE END 0 */
 
 /**
@@ -90,58 +144,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-  void process_command(ring_buffer_t *rb, uint8_t *buffer, char *state) {
-    if (ring_buffer_size(rb) == 5) {  // Verifica si el comando es de longitud 5
-        // Lee el comando completo del buffer
-        for (int i = 0; i < 5; i++) {
-            ring_buffer_read(rb, &buffer[i]);
-        }
-        buffer[5] = '\0';  // Asegura el término del string
-
-        // Procesa el comando basado en su contenido
-        if (strcmp((char *)buffer, "#*A*#") == 0) {
-            if (strcmp(state, "Op") == 0) {
-                HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta ya esta abierta\r\n", 26, 100);
-            } else {
-                HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);  // Cambia el estado del LED
-                HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta Abierta\r\n", 17, 100);
-                strcpy(state, "Op");
-            }
-        } else if (strcmp((char *)buffer, "#*C*#") == 0) {
-            if (strcmp(state, "Cl") == 0) {
-                HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta ya esta cerrada\r\n", 27, 100);
-            } else {
-                HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);  // Cambia el estado del LED
-                HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta Cerrada\r\n", 17, 100);
-                strcpy(state, "Cl");
-            }
-        } else if (strcmp((char *)buffer, "#*1*#") == 0) {
-            if (strcmp(state, "Cl") == 0) {
-                HAL_UART_Transmit(&huart2, (uint8_t *)"Estado de la puerta:Cerrada\r\n", 36, 100);
-            } else {
-                HAL_UART_Transmit(&huart2, (uint8_t *)"Estado de la puerta:Abierta\r\n", 36, 100);
-            }
-        } else if (strcmp((char *)buffer, "#*0*#") == 0) {
-            HAL_UART_Transmit(&huart2, (uint8_t *)"Buffer limpiado y puerta cerrada\r\n", 38, 100);
-            ring_buffer_reset(rb);
-            strcpy(state, "Cl");
-            HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-            HAL_Delay(500);
-            HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-            HAL_Delay(500);
-            HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-            HAL_Delay(500);
-            HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
-        } else {
-            HAL_UART_Transmit(&huart2, (uint8_t *)"Comando no reconocido\r\n", 24, 100);
-        }
-
-        // Reinicia el buffer de comando
-        for (int i = 0; i < 5; i++) {
-            buffer[i] = '_';
-        }
-    }
-  }
+  
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -168,9 +171,10 @@ int main(void)
   /* USER CODE BEGIN 2 */
   initialise_monitor_handles();  // Inicializa el monitor de depuración
   setvbuf(stdout, NULL, _IONBF, 0);  // Desactiva el buffer de stdout
-  //ssd1306_Init();
-  //ssd1306_Fill(White);
-  //ssd1306_UpdateScreen();
+  ssd1306_Init();
+  ssd1306_Fill(Black);
+  ssd1306_DrawBitmap(0, 0, unlocked, 128, 64, White);
+  ssd1306_UpdateScreen();
   ring_buffer_t rb_matrix;
   ring_buffer_t rb_pc;
 

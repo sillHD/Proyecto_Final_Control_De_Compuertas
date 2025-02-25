@@ -69,7 +69,7 @@ def convert_png_to_c_array2(image_path, output_file, width=128, height=64):
                 byte_array[byte_index] |= (1 << bit_position)
 
     # Generar el código en formato C
-    c_code = f"const uint8_t unlocked[{len(byte_array)}] = \n"
+    c_code = f"const uint8_t unlocked[{len(byte_array)}] = {{\n"  
     for i, byte in enumerate(byte_array):
         c_code += f" 0x{byte:02X},"
         if (i + 1) % 16 == 0:  # Salto de línea cada 16 bytes
@@ -83,9 +83,6 @@ def convert_png_to_c_array2(image_path, output_file, width=128, height=64):
     print(f"C array guardado en {output_file}")
 
 # Uso del script
-convert_png_to_c_array("Assets/unlocked.png", 
-                       "Assets/locked.h", 
-                       width=128, height=64)
-convert_png_to_c_array2("Assets/locked.png", 
-                       "Assets/locked.h", 
-                       width=128, height=64)
+convert_png_to_c_array("Assets/locked.png","Assets/locked.h",width=128, height=64)
+
+convert_png_to_c_array2("Assets/unlocked.png","Assets/unlocked.h",width=128, height=64)
