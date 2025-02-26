@@ -82,6 +82,77 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
   column_pressed = GPIO_Pin;
 }
 
+
+void OLED_Printer(ring_buffer_t *rb, uint8_t *buffer, char *state)
+{
+  if(strcmp((char *)buffer, "#*0*#") == 0)
+  {
+    ssd1306_Fill(Black);
+    ssd1306_SetCursor(0, 0);
+    ssd1306_WriteString("Buffer:Clean", Font_7x10, White);
+    ssd1306_SetCursor(0, 30);
+    ssd1306_WriteString("Door:Cl", Font_7x10, White);
+    ssd1306_UpdateScreen();
+    HAL_Delay(5000); 
+    ssd1306_Fill(Black);
+    ssd1306_DrawBitmap(0, 0, unlocked, 128, 64, White);
+    ssd1306_UpdateScreen();
+    return 0;
+  }
+
+  if (strcmp((char *)buffer, "#*A*#") == 0)
+  {
+    if (strcmp(state, "Op") == 0)
+    {
+      ssd1306_Fill(Black);
+      ssd1306_SetCursor(0, 0);
+      ssd1306_WriteString("Puerta ya esta abierta", Font_7x10, White);
+      ssd1306_UpdateScreen();
+      HAL_Delay(5000); 
+      ssd1306_Fill(Black);
+      ssd1306_DrawBitmap(0, 0, unlocked, 128, 64, White);
+      ssd1306_UpdateScreen();
+    }
+    else
+    {
+      ssd1306_Fill(Black);
+      ssd1306_SetCursor(0, 0);
+      ssd1306_WriteString("Door: Op", Font_7x10, White);
+      ssd1306_UpdateScreen();
+      HAL_Delay(5000); 
+      ssd1306_Fill(Black);
+      ssd1306_DrawBitmap(0, 0, unlocked, 128, 64, White);
+      ssd1306_UpdateScreen();
+   }
+  }
+
+ else if (strcmp((char *)buffer, "#*C*#") == 0)
+ {
+  if (strcmp(state, "Cl") == 0)
+  {
+    ssd1306_Fill(Black);
+    ssd1306_SetCursor(0, 0);
+    ssd1306_WriteString("Puerta ya esta cerrada", Font_7x10, White);
+    ssd1306_UpdateScreen();
+    HAL_Delay(5000); 
+    ssd1306_Fill(Black);
+    ssd1306_DrawBitmap(0, 0, unlocked, 128, 64, White);
+    ssd1306_UpdateScreen();
+  }
+  else
+  {
+    ssd1306_Fill(Black);
+    ssd1306_SetCursor(0, 0);
+    ssd1306_WriteString("Door: Cl", Font_7x10, White);
+    ssd1306_UpdateScreen();
+    HAL_Delay(5000); 
+    ssd1306_Fill(Black);
+    ssd1306_DrawBitmap(0, 0, unlocked, 128, 64, White);
+    ssd1306_UpdateScreen();
+  } 
+ }
+}
+
 void process_command(ring_buffer_t *rb, uint8_t *buffer, char *state) {
   if (ring_buffer_size(rb) == 5) {  // Verifica si el comando es de longitud 5
       // Lee el comando completo del buffer
@@ -94,41 +165,47 @@ void process_command(ring_buffer_t *rb, uint8_t *buffer, char *state) {
       if (strcmp((char *)buffer, "#*A*#") == 0) {
           if (strcmp(state, "Op") == 0) {
               HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta ya esta abierta\r\n", 26, 100);
+              OLED_Printer(rb, buffer, state);
           } else {
               HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);  // Cambia el estado del LED
               HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta Abierta\r\n", 17, 100);
+              OLED_Printer(rb, buffer, state);
               strcpy(state, "Op");
           }
-          OLED_Printer(ring_buffer_t *rb, uint8_t *buffer, char *state);
 
       } 
 
       else if (strcmp((char *)buffer, "#*C*#") == 0) {
           if (strcmp(state, "Cl") == 0) {
               HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta ya esta cerrada\r\n", 27, 100);
+              OLED_Printer(rb, buffer, state);
           } else {
               HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);  // Cambia el estado del LED
               HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta Cerrada\r\n", 17, 100);
+              OLED_Printer(rb, buffer, state);
               strcpy(state, "Cl");
           }
-          OLED_Printer(ring_buffer_t *rb, uint8_t *buffer, char *state);
       } 
 
       else if (strcmp((char *)buffer, "#*1*#") == 0) {
           if (strcmp(state, "Cl") == 0) {
               HAL_UART_Transmit(&huart2, (uint8_t *)"Estado de la puerta:Cerrada\r\n", 36, 100);
               ssd1306_Fill(Black);
-              ssd1306_WriteString((char *)"Estado de la puerta:Cerrada", Font_7x10, White);
+              ssd1306_SetCursor(0, 0);
+              ssd1306_WriteString((char *)"Door state:Cl", Font_7x10, White);
               ssd1306_UpdateScreen();
-              HAL_Delay(10000); //
+              HAL_Delay(5000); 
+              ssd1306_Fill(Black);
               ssd1306_DrawBitmap(0, 0, locked, 128, 64, White);
               ssd1306_UpdateScreen();
           } else {
               HAL_UART_Transmit(&huart2, (uint8_t *)"Estado de la puerta:Abierta\r\n", 36, 100);
               ssd1306_Fill(Black);
-              ssd1306_WriteString((char *)"Estado de la puerta:Abierta", Font_7x10, White);
+              ssd1306_SetCursor(0, 0);
+              ssd1306_WriteString((char *)"Door state:Op", Font_7x10, White);
               ssd1306_UpdateScreen();
-              HAL_Delay(10000); //
+              HAL_Delay(5000); 
+              ssd1306_Fill(Black);
               ssd1306_DrawBitmap(0, 0, unlocked, 128, 64, White);
               ssd1306_UpdateScreen();
           }
@@ -137,6 +214,7 @@ void process_command(ring_buffer_t *rb, uint8_t *buffer, char *state) {
       else if (strcmp((char *)buffer, "#*0*#") == 0) {
           HAL_UART_Transmit(&huart2, (uint8_t *)"Buffer limpiado y puerta cerrada\r\n", 38, 100);
           ring_buffer_reset(rb);
+          OLED_Printer(rb, buffer, state);
           strcpy(state, "Cl");
           HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
           HAL_Delay(500);
@@ -145,50 +223,35 @@ void process_command(ring_buffer_t *rb, uint8_t *buffer, char *state) {
           HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
           HAL_Delay(500);
           HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
-          OLED_Printer(ring_buffer_t *rb, uint8_t *buffer, char *state);
       } 
 
       else {
           HAL_UART_Transmit(&huart2, (uint8_t *)"Comando no reconocido\r\n", 24, 100);
+          if (strcmp(state, "Cl") == 0) {
+              ssd1306_Fill(Black);
+              ssd1306_SetCursor(0, 0);
+              ssd1306_WriteString((char *)"Comand unknown", Font_7x10, White);
+              ssd1306_UpdateScreen();
+              HAL_Delay(5000); 
+              ssd1306_Fill(Black);
+              ssd1306_DrawBitmap(0, 0, locked, 128, 64, White);
+              ssd1306_UpdateScreen();
+          } else {
+              ssd1306_Fill(Black);
+              ssd1306_SetCursor(0, 0);
+              ssd1306_WriteString((char *)"Comand unknown", Font_7x10, White);
+              ssd1306_UpdateScreen();
+              HAL_Delay(5000); 
+              ssd1306_Fill(Black);
+              ssd1306_DrawBitmap(0, 0, unlocked, 128, 64, White);
+              ssd1306_UpdateScreen();
+          }
       }
 
       // Reinicia el buffer de comando
       for (int i = 0; i < 5; i++) {
           buffer[i] = '_';
       }
-  }
-}
-
-
-void OLED_Printer(ring_buffer_t *rb, uint8_t *buffer, char *state)
-{
-  if(strcmp((char *)buffer, "#*0*#") == 0)
-  {
-    ssd1306_Fill(Black);
-    ssd1306_WriteString((char *)"Buffer limpiado y puerta cerrada", Font_7x10, White);
-    ssd1306_UpdateScreen();
-    HAL_Delay(10000); //
-    ssd1306_DrawBitmap(0, 0, unlocked, 128, 64, White);
-    ssd1306_UpdateScreen();
-    break;
-  }
-  if (strcmp(state, "Op") == 0)
-  {
-    ssd1306_Fill(Black);
-    ssd1306_WriteString((char *)"Puerta Abierta", Font_7x10, White);
-    ssd1306_UpdateScreen();
-    HAL_Delay(10000); //
-    ssd1306_DrawBitmap(0, 0, unlocked, 128, 64, White);
-    ssd1306_UpdateScreen();
-  }
-  else if (strcmp(state, "Cl") == 0)
-  {
-    ssd1306_Fill(Black);
-    ssd1306_WriteString((char *)"Puerta Cerrada", Font_7x10, White);
-    ssd1306_UpdateScreen();
-    HAL_Delay(10000); //
-    ssd1306_DrawBitmap(0, 0, locked, 128, 64, White);
-    ssd1306_UpdateScreen();
   }
 }
 /* USER CODE END 0 */
@@ -246,10 +309,11 @@ int main(void)
   ring_buffer_init(&rb_matrix, buffer_matrix, 5);  // Inicializa el ring buffer
   ring_buffer_init(&rb_pc, buffer_pc, 5);
   HAL_UART_Transmit(&huart2, (uint8_t *)"Hello World\r\n\0", 20, 100);  // Envía el mensaje "Hello World"
-  ssd1306_Write(&huart2, "Hello World", Font_11x18, White);
+  ssd1306_WriteString("Door default: Cl", Font_7x10, White);
   ssd1306_UpdateScreen();
-  HAL_Delay(10000); //
-  ssd1306_DrawBitmap(0, 0, unlocked, 128, 64, White);
+  HAL_Delay(5000); //
+  ssd1306_Fill(Black);
+  ssd1306_DrawBitmap(0, 0, locked, 128, 64, White);
   ssd1306_UpdateScreen();
   uint8_t key;  // Variable para almacenar la tecla presionada desde el teclado matricial
   uint8_t pc_key;  // Variable para recibir teclas desde la PC
