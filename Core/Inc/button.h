@@ -3,6 +3,6 @@
 
 #include <stdint.h>
 
-uint8_t detect_button_press(void);
+int detect_button_press(void);
 
 #endif // __BUTTON_H_

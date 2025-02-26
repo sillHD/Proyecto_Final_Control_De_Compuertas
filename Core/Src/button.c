@@ -3,7 +3,7 @@
 
 uint32_t b1_tick = 0; // para detectar antirebote y doble presion basado en el ultimo evento
 
-uint8_t detect_button_press(void) {
+int detect_button_press(void) {
     uint8_t button_pressed = 0;
     if (HAL_GetTick() - b1_tick < 50) {
         // Ignore bounces less than 50ms

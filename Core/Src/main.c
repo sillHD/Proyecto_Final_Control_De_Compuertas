@@ -29,6 +29,7 @@
 #include "locked.h"
 #include "unlocked.h"
 #include "ring_buffer.h"
+#include "button.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -83,9 +84,9 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 }
 
 
-void OLED_Printer(ring_buffer_t *rb, uint8_t *buffer, char *state)
+void OLED_Printer(ring_buffer_t *rb, uint8_t *buffer, char *state, int*button)
 {
-  if(strcmp((char *)buffer, "#*0*#") == 0)
+  if(strcmp((char *)buffer, "#*0*#") == 0 )
   {
     ssd1306_Fill(Black);
     ssd1306_SetCursor(0, 0);
@@ -95,12 +96,12 @@ void OLED_Printer(ring_buffer_t *rb, uint8_t *buffer, char *state)
     ssd1306_UpdateScreen();
     HAL_Delay(5000); 
     ssd1306_Fill(Black);
-    ssd1306_DrawBitmap(0, 0, unlocked, 128, 64, White);
+    ssd1306_DrawBitmap(0, 0, locked, 128, 64, White);
     ssd1306_UpdateScreen();
-    return 0;
+    return;
   }
 
-  if (strcmp((char *)buffer, "#*A*#") == 0)
+  if (strcmp((char *)buffer, "#*A*#") == 0 || *button == 2)
   {
     if (strcmp(state, "Op") == 0)
     {
@@ -126,7 +127,7 @@ void OLED_Printer(ring_buffer_t *rb, uint8_t *buffer, char *state)
    }
   }
 
- else if (strcmp((char *)buffer, "#*C*#") == 0)
+ else if (strcmp((char *)buffer, "#*C*#") == 0 || *button == 1)
  {
   if (strcmp(state, "Cl") == 0)
   {
@@ -153,8 +154,8 @@ void OLED_Printer(ring_buffer_t *rb, uint8_t *buffer, char *state)
  }
 }
 
-void process_command(ring_buffer_t *rb, uint8_t *buffer, char *state) {
-  if (ring_buffer_size(rb) == 5) {  // Verifica si el comando es de longitud 5
+void process_command(ring_buffer_t *rb, uint8_t *buffer, char *state, int *button) {
+  if (ring_buffer_size(rb) == 5 || *button == 1 || *button == 2) {  // Verifica si el comando es de longitud 5
       // Lee el comando completo del buffer
       for (int i = 0; i < 5; i++) {
           ring_buffer_read(rb, &buffer[i]);
@@ -162,27 +163,27 @@ void process_command(ring_buffer_t *rb, uint8_t *buffer, char *state) {
       buffer[5] = '\0';  // Asegura el término del string
 
       // Procesa el comando basado en su contenido
-      if (strcmp((char *)buffer, "#*A*#") == 0) {
+      if (strcmp((char *)buffer, "#*A*#") == 0 || *button == 2) {
           if (strcmp(state, "Op") == 0) {
               HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta ya esta abierta\r\n", 26, 100);
-              OLED_Printer(rb, buffer, state);
+              OLED_Printer(rb, buffer, state,button);
           } else {
               HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);  // Cambia el estado del LED
               HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta Abierta\r\n", 17, 100);
-              OLED_Printer(rb, buffer, state);
+              OLED_Printer(rb, buffer, state,button);
               strcpy(state, "Op");
           }
 
       } 
 
-      else if (strcmp((char *)buffer, "#*C*#") == 0) {
+      else if (strcmp((char *)buffer, "#*C*#") == 0 || *button == 1) {
           if (strcmp(state, "Cl") == 0) {
               HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta ya esta cerrada\r\n", 27, 100);
-              OLED_Printer(rb, buffer, state);
+              OLED_Printer(rb, buffer, state, button);
           } else {
               HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);  // Cambia el estado del LED
               HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta Cerrada\r\n", 17, 100);
-              OLED_Printer(rb, buffer, state);
+              OLED_Printer(rb, buffer, state, button);
               strcpy(state, "Cl");
           }
       } 
@@ -214,7 +215,7 @@ void process_command(ring_buffer_t *rb, uint8_t *buffer, char *state) {
       else if (strcmp((char *)buffer, "#*0*#") == 0) {
           HAL_UART_Transmit(&huart2, (uint8_t *)"Buffer limpiado y puerta cerrada\r\n", 38, 100);
           ring_buffer_reset(rb);
-          OLED_Printer(rb, buffer, state);
+          OLED_Printer(rb, buffer, state, 0);
           strcpy(state, "Cl");
           HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
           HAL_Delay(500);
@@ -327,11 +328,12 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    int button = 2;
     // Procesa teclas del teclado matricial
     if (column_pressed != 0 && (key_pressed_tick + 5) < HAL_GetTick()) {
       key = keypad_scan(column_pressed);
       column_pressed = 0;
-      if (key != 'E') {
+      if (key != 'E' && button == 0) {
           ring_buffer_write(&rb_matrix, key);
           uint8_t size = ring_buffer_size(&rb_matrix);
           char msg[45];
@@ -341,7 +343,7 @@ int main(void)
     }
 
     // Procesa teclas recibidas desde la PC
-    if (HAL_UART_Receive(&huart2, &pc_key, 1, 10) == HAL_OK) {
+    if (HAL_UART_Receive(&huart2, &pc_key, 1, 10) == HAL_OK && button == 0) {
       ring_buffer_write(&rb_pc, pc_key);
       uint8_t size = ring_buffer_size(&rb_pc);
       char msg[45];
@@ -350,8 +352,8 @@ int main(void)
     }
 
    // Procesa comandos para ambos buffers
-    process_command(&rb_matrix, buffer_matrix, state);
-    process_command(&rb_pc, buffer_pc, state);
+    process_command(&rb_matrix, buffer_matrix, state, button);
+    process_command(&rb_pc, buffer_pc, state, button);
 
     HAL_Delay(100);
   }
