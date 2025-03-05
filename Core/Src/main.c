@@ -27,10 +27,13 @@
 #include "keypad.h"
 #include "ssd1306.h"
 #include "ssd1306_fonts.h"
-#include "locked.h"
-#include "unlocked.h"
 #include "ring_buffer.h"
 #include "button.h"
+#include "prints_display.h"
+#include "command.h"
+#include "display_main.h"
+#include "state_machine.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -65,6 +68,8 @@ uint8_t buffer_internet[5];
 
 uint32_t key_pressed_tick = 0;
 uint16_t column_pressed = 0;
+uint8_t b1_press_count = 0;
+
 
 uint32_t debounce_tick = 0;
 bool control_uart2 = false;
@@ -73,6 +78,11 @@ uint8_t key;
 
 extern char state[3];
 char state[3] = "Cl";
+
+extern volatile uint32_t door_open_time; // Almacena el tiempo en el que se abrió la puerta temporalmente
+extern volatile uint8_t temp_open;       // Flag para saber si la puerta está temporalmente abierta
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -88,37 +98,6 @@ static void MX_I2C1_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-  if ((debounce_tick + 200) > HAL_GetTick()) {
-    return;
-  }
-  debounce_tick = HAL_GetTick();
-  key_pressed_tick = HAL_GetTick();
-  column_pressed = GPIO_Pin;
-}
-
-
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{
-  if (huart->Instance == USART2) {
-    // HAL_UART_Transmit(&huart3, huart->pRxBuffPtr, huart->RxXferSize, 1000);
-    control_uart2 = true;  
-  } 
-  else if (huart->Instance == USART3) {
-    // HAL_UART_Transmit(&huart2, huart->pRxBuffPtr, huart->RxXferSize, 1000);
-    control_uart3 = true;  
-
-  }
-}
-
-void low_power_sleep_mode(void) {
-  HAL_SuspendTick(); // Detener el SysTick para reducir consumo
-  HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
-  HAL_ResumeTick(); // Restaurar el SysTick después de salir del Sleep Mode
-}
-
-
 int system_events_handler(char *event)
 {
   if (strcmp(event, "Op") == 0) {
@@ -133,6 +112,77 @@ int system_events_handler(char *event)
   return -1; // Return a default value if no condition is met
 }
 
+void low_power_sleep_mode(void) {
+  HAL_SuspendTick(); // Detener el SysTick para reducir consumo
+  HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+  HAL_ResumeTick(); // Restaurar el SysTick después de salir del Sleep Mode
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+  if (GPIO_Pin == B1_Pin) { // Botón
+      int press_type = detect_button_press();
+      
+      if (press_type == 1) { // Un solo clic
+          if (strcmp(state, "Cl") == 0) {
+              strcpy(state, "Op");
+              HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta Abierta\r\n", 16, 100);
+              HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET);
+              ssd1306_Fill(Black);
+              show_opened();
+          } else {
+              strcpy(state, "Cl");
+              HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta Cerrada\r\n", 16, 100);
+              HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+              ssd1306_Fill(Black);
+              show_closed();
+          }
+      } else if (press_type == 2) { // Doble clic
+          if (strcmp(state, "To") == 0) {
+            return;
+          }
+          strcpy(state, "To"); // Temporalmente abierta
+          HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta Abierta Temporalmente\r\n", 30, 100);
+          HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET);
+          ssd1306_Fill(Black);
+          show_opened();
+          
+          // Iniciar temporizador en el loop principal
+          initialize_temp();
+      }
+  }
+  else { // Keypad
+      column_pressed = GPIO_Pin;
+  }
+}
+
+void check_door_timeout() {
+  if (temp_open && (HAL_GetTick() - door_open_time >= 3000)) { // Espera 3 segundos
+      strcpy(state, "Cl");
+      HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta Cerrada\r\n", 16, 100);
+      HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+      ssd1306_Fill(Black);
+      show_closed();
+      temp_open = 0; // Reiniciar flag
+  }
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+  if (huart->Instance == USART2) {
+    // HAL_UART_Transmit(&huart3, huart->pRxBuffPtr, huart->RxXferSize, 1000);
+    control_uart2 = true;  
+  } 
+  else if (huart->Instance == USART3) {
+    // HAL_UART_Transmit(&huart2, huart->pRxBuffPtr, huart->RxXferSize, 1000);
+    control_uart3 = true;  
+
+  }
+}
+
+/**
+ * @brief  Heartbeat function to blink LED2 every 1 second to indicate the system is running
+*/
+
 void heartbeat(void)
 {
   static uint32_t last_heartbeat = 0;
@@ -140,197 +190,6 @@ void heartbeat(void)
   {
     last_heartbeat = HAL_GetTick();
     HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
-  }
-}
-
-void system_state_machine(char *states)
-{
-  int state = system_events_handler(states);
-  switch (state)
-  {
-    case 0: // Door closed
-      //HAL_UART_Transmit(&huart2, (uint8_t *)"Door closed\r\n", 13, 100);
-      break;
-    case 1: // Door temporarily opened;
-      //HAL_UART_Transmit(&huart2, (uint8_t *)"Door temporarily opened\r\n", 25, 100);
-      break;
-    case 2: // Door permanent opened
-       //HAL_UART_Transmit(&huart2, (uint8_t *)"Door opened\r\n", 13, 100);
-      break;
-    default:
-      break;
-  }
-}
-
-void OLED_Printer(ring_buffer_t *rb, uint8_t *buffer, char *state)
-{
-  if(strcmp((char *)buffer, "#*0*#") == 0 )
-  {
-    ssd1306_Fill(Black);
-    ssd1306_SetCursor(0, 0);
-    ssd1306_WriteString("Buffer:Clean", Font_7x10, White);
-    ssd1306_SetCursor(0, 30);
-    ssd1306_WriteString("Door:Cl", Font_7x10, White);
-    ssd1306_UpdateScreen();
-    HAL_Delay(2000); 
-    ssd1306_Fill(Black);
-    ssd1306_DrawBitmap(0, 0, locked, 128, 64, White);
-    ssd1306_UpdateScreen();
-    return;
-  }
-
-  if (strcmp((char *)buffer, "#*A*#") == 0)
-  {
-    if (strcmp(state, "Op") == 0)
-    {
-      ssd1306_Fill(Black);
-      ssd1306_SetCursor(0, 0);
-      ssd1306_WriteString("Puerta ya esta abierta", Font_7x10, White);
-      ssd1306_UpdateScreen();
-      HAL_Delay(2000); 
-      ssd1306_Fill(Black);
-      ssd1306_DrawBitmap(0, 0, unlocked, 128, 64, White);
-      ssd1306_UpdateScreen();
-    }
-    else
-    {
-      ssd1306_Fill(Black);
-      ssd1306_SetCursor(0, 0);
-      ssd1306_WriteString("Door: Op", Font_7x10, White);
-      ssd1306_UpdateScreen();
-      HAL_Delay(2000); 
-      ssd1306_Fill(Black);
-      ssd1306_DrawBitmap(0, 0, unlocked, 128, 64, White);
-      ssd1306_UpdateScreen();
-   }
-  }
-
- else if (strcmp((char *)buffer, "#*C*#") == 0)
- {
-  if (strcmp(state, "Cl") == 0)
-  {
-    ssd1306_Fill(Black);
-    ssd1306_SetCursor(0, 0);
-    ssd1306_WriteString("Puerta ya esta cerrada", Font_7x10, White);
-    ssd1306_UpdateScreen();
-    HAL_Delay(2000); 
-    ssd1306_Fill(Black);
-    ssd1306_DrawBitmap(0, 0, locked, 128, 64, White);
-    ssd1306_UpdateScreen();
-  }
-  else
-  {
-    ssd1306_Fill(Black);
-    ssd1306_SetCursor(0, 0);
-    ssd1306_WriteString("Door: Cl", Font_7x10, White);
-    ssd1306_UpdateScreen();
-    HAL_Delay(2000); 
-    ssd1306_Fill(Black);
-    ssd1306_DrawBitmap(0, 0, locked, 128, 64, White);
-    ssd1306_UpdateScreen();
-  } 
- }
-}
-
-void process_command(ring_buffer_t *rb, uint8_t *buffer, char *state) {
-  if (ring_buffer_size(rb) == 5) {  // Verifica si el comando es de longitud 5
-      // Lee el comando completo del buffer
-      for (int i = 0; i < 5; i++) {
-          ring_buffer_read(rb, &buffer[i]);
-      }
-      buffer[5] = '\0';  // Asegura el término del string
-
-      // Procesa el comando basado en su contenido
-      if (strcmp((char *)buffer, "#*A*#") == 0) {
-          if (strcmp(state, "Op") == 0) {
-              HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta ya esta abierta\r\n", 24, 100);
-              OLED_Printer(rb, buffer, state);
-          } else {
-              HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);  // Cambia el estado del LED
-                HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta Abierta\r\n", 16, 100);
-                OLED_Printer(rb, buffer, state);
-              strcpy(state, "Op");
-          }
-
-      } 
-
-      else if (strcmp((char *)buffer, "#*C*#") == 0) {
-          if (strcmp(state, "Cl") == 0) {
-              HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta ya esta cerrada\r\n", 24, 100);
-              OLED_Printer(rb, buffer, state);
-          } else {
-              HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);  // Cambia el estado del LED
-              HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta Cerrada\r\n", 16, 100);
-              OLED_Printer(rb, buffer, state);
-              strcpy(state, "Cl");
-          }
-      } 
-
-      else if (strcmp((char *)buffer, "#*1*#") == 0) {
-          if (strcmp(state, "Cl") == 0) {
-              HAL_UART_Transmit(&huart2, (uint8_t *)"Estado de la puerta:Cerrada\r\n", 28, 100);
-              ssd1306_Fill(Black);
-              ssd1306_SetCursor(0, 0);
-              ssd1306_WriteString((char *)"Door state:Cl", Font_7x10, White);
-              ssd1306_UpdateScreen();
-              HAL_Delay(5000); 
-              ssd1306_Fill(Black);
-              ssd1306_DrawBitmap(0, 0, locked, 128, 64, White);
-              ssd1306_UpdateScreen();
-          } else {
-              HAL_UART_Transmit(&huart2, (uint8_t *)"Estado de la puerta:Abierta\r\n", 28, 100);
-              ssd1306_Fill(Black);
-              ssd1306_SetCursor(0, 0);
-              ssd1306_WriteString((char *)"Door state:Op", Font_7x10, White);
-              ssd1306_UpdateScreen();
-              HAL_Delay(5000); 
-              ssd1306_Fill(Black);
-              ssd1306_DrawBitmap(0, 0, unlocked, 128, 64, White);
-              ssd1306_UpdateScreen();
-          }
-      } 
-
-      else if (strcmp((char *)buffer, "#*0*#") == 0) {
-          HAL_UART_Transmit(&huart2, (uint8_t *)"Buffer limpiado y puerta cerrada\r\n", 34, 100);
-          ring_buffer_reset(rb);
-          OLED_Printer(rb, buffer, state);
-          strcpy(state, "Cl");
-          HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-          HAL_Delay(500);
-          HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-          HAL_Delay(500);
-          HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-          HAL_Delay(500);
-          HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
-      } 
-
-      else {
-          HAL_UART_Transmit(&huart2, (uint8_t *)"Comando no reconocido\r\n", 23, 100);
-          if (strcmp(state, "Cl") == 0) {
-              ssd1306_Fill(Black);
-              ssd1306_SetCursor(0, 0);
-              ssd1306_WriteString((char *)"Comand unknown", Font_7x10, White);
-              ssd1306_UpdateScreen();
-              HAL_Delay(2000); 
-              ssd1306_Fill(Black);
-              ssd1306_DrawBitmap(0, 0, locked, 128, 64, White);
-              ssd1306_UpdateScreen();
-          } else {
-              ssd1306_Fill(Black);
-              ssd1306_SetCursor(0, 0);
-              ssd1306_WriteString((char *)"Comand unknown", Font_7x10, White);
-              ssd1306_UpdateScreen();
-              HAL_Delay(2000); 
-              ssd1306_Fill(Black);
-              ssd1306_DrawBitmap(0, 0, unlocked, 128, 64, White);
-              ssd1306_UpdateScreen();
-          }
-      }
-
-      // Reinicia el buffer de comando
-      for (int i = 0; i < 5; i++) {
-          buffer[i] = '_';
-      }
   }
 }
 
@@ -342,6 +201,7 @@ int _write(int file, char *ptr, int len)
 
   return len;
 }
+
 /* USER CODE END 0 */
 
 /**
@@ -383,7 +243,7 @@ int main(void)
   ssd1306_UpdateScreen();
 
 
-  for (int i = 0; i < sizeof(buffer_matrix); i++) {
+  for (unsigned int i = 0; i < sizeof(buffer_matrix); i++) {
     buffer_matrix[i] = '_';
   }  
 
@@ -400,8 +260,7 @@ int main(void)
   ssd1306_UpdateScreen();
   HAL_Delay(1000); 
   ssd1306_Fill(Black);
-  ssd1306_DrawBitmap(0, 0, locked, 128, 64, White);
-  ssd1306_UpdateScreen();
+  show_closed();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -409,6 +268,7 @@ int main(void)
   while (1)
   {
     heartbeat();
+    check_door_timeout();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -420,10 +280,8 @@ int main(void)
           ring_buffer_write(&rb_matrix, key);
           uint8_t size = ring_buffer_size(&rb_matrix);
           printf("Key: %c, Buffer: %s, Size: %d\r\n", key, buffer_matrix, size);
-          char msg[45];
-          snprintf(msg, sizeof(msg), "Key: %c, Buffer: %s, Size: %d\r\n", key, buffer_matrix, size);
-          HAL_UART_Transmit(&huart2, (uint8_t *)msg, strlen(msg), 100);
-
+          process_command(&rb_matrix, buffer_matrix, state);
+          //system_state_machine(state);
 
       }
     }
@@ -438,8 +296,10 @@ int main(void)
       ring_buffer_write(&rb_pc, buffer_pc[3]);
       ring_buffer_write(&rb_pc, buffer_pc[4]);
       uint8_t size = ring_buffer_size(&rb_pc);
-      printf("Buffer: %s, Size: %d\r\n",buffer_pc, size);
+      printf("Terminal Buffer: %s, Size: %d\r\n",buffer_pc, size);
       process_command(&rb_pc, buffer_pc, state);
+      //system_state_machine(state);
+
 
 
     }
@@ -452,14 +312,15 @@ int main(void)
       ring_buffer_write(&rb_internet, buffer_internet[3]);
       ring_buffer_write(&rb_internet, buffer_internet[4]);
       uint8_t size = ring_buffer_size(&rb_internet);
-      printf("\rBuffer: %s, Size: %d\r\n",buffer_internet, size);
+      printf("\nInternet Buffer: %s, Size: %d\r\n",buffer_internet, size);
       process_command(&rb_internet, buffer_internet, state);
+      //system_state_machine(state);
+
 
     }
+    system_state_machine(state);
     HAL_UART_Receive_IT(&huart2, buffer_pc , 5);
     HAL_UART_Receive_IT(&huart3, buffer_internet , 5);
-    process_command(&rb_matrix, buffer_matrix, state);
-
     HAL_Delay(100);
   }
   /* USER CODE END 3 */
@@ -650,7 +511,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, LD2_Pin|ROW_1_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, LD2_Pin|LD1_Pin|ROW_1_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, ROW_2_Pin|ROW_4_Pin|ROW_3_Pin, GPIO_PIN_RESET);
@@ -661,12 +522,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : LD2_Pin */
-  GPIO_InitStruct.Pin = LD2_Pin;
+  /*Configure GPIO pins : LD2_Pin LD1_Pin */
+  GPIO_InitStruct.Pin = LD2_Pin|LD1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pin : COLUMN_1_Pin */
   GPIO_InitStruct.Pin = COLUMN_1_Pin;

@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "locked.h": "c",
+        "ring_buffer.h": "c"
+    }
+}

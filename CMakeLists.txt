@@ -50,6 +50,10 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     External/ssd1306/ssd1306.c
     External/ssd1306/ssd1306_fonts.c
     Core/Src/button.c
+    Core/Src/prints_display.c
+    Core/Src/display_main.c
+    Core/Src/command.c
+    Core/Src/state_machine.c
     Core/Src/ring_buffer.c
     Drivers/keypad/keypad.c
     # Add user sources here
