@@ -111,7 +111,7 @@ void OLED_Printer(ring_buffer_t *rb, uint8_t *buffer, char *state)
     ssd1306_SetCursor(0, 30);
     ssd1306_WriteString("Door:Cl", Font_7x10, White);
     ssd1306_UpdateScreen();
-   // HAL_Delay(5000); 
+    HAL_Delay(2000); 
     ssd1306_Fill(Black);
     ssd1306_DrawBitmap(0, 0, locked, 128, 64, White);
     ssd1306_UpdateScreen();
@@ -126,7 +126,7 @@ void OLED_Printer(ring_buffer_t *rb, uint8_t *buffer, char *state)
       ssd1306_SetCursor(0, 0);
       ssd1306_WriteString("Puerta ya esta abierta", Font_7x10, White);
       ssd1306_UpdateScreen();
-      //HAL_Delay(5000); 
+      HAL_Delay(2000); 
       ssd1306_Fill(Black);
       ssd1306_DrawBitmap(0, 0, unlocked, 128, 64, White);
       ssd1306_UpdateScreen();
@@ -137,7 +137,7 @@ void OLED_Printer(ring_buffer_t *rb, uint8_t *buffer, char *state)
       ssd1306_SetCursor(0, 0);
       ssd1306_WriteString("Door: Op", Font_7x10, White);
       ssd1306_UpdateScreen();
-      //HAL_Delay(5000); 
+      HAL_Delay(2000); 
       ssd1306_Fill(Black);
       ssd1306_DrawBitmap(0, 0, unlocked, 128, 64, White);
       ssd1306_UpdateScreen();
@@ -152,7 +152,7 @@ void OLED_Printer(ring_buffer_t *rb, uint8_t *buffer, char *state)
     ssd1306_SetCursor(0, 0);
     ssd1306_WriteString("Puerta ya esta cerrada", Font_7x10, White);
     ssd1306_UpdateScreen();
-    //HAL_Delay(5000); 
+    HAL_Delay(2000); 
     ssd1306_Fill(Black);
     ssd1306_DrawBitmap(0, 0, locked, 128, 64, White);
     ssd1306_UpdateScreen();
@@ -163,7 +163,7 @@ void OLED_Printer(ring_buffer_t *rb, uint8_t *buffer, char *state)
     ssd1306_SetCursor(0, 0);
     ssd1306_WriteString("Door: Cl", Font_7x10, White);
     ssd1306_UpdateScreen();
-    //HAL_Delay(5000); 
+    HAL_Delay(2000); 
     ssd1306_Fill(Black);
     ssd1306_DrawBitmap(0, 0, locked, 128, 64, White);
     ssd1306_UpdateScreen();
@@ -182,11 +182,11 @@ void process_command(ring_buffer_t *rb, uint8_t *buffer, char *state) {
       // Procesa el comando basado en su contenido
       if (strcmp((char *)buffer, "#*A*#") == 0) {
           if (strcmp(state, "Op") == 0) {
-              HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta ya esta abierta\r\n", 26, 100);
+              HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta ya esta abierta\r\n", 24, 100);
               OLED_Printer(rb, buffer, state);
           } else {
               HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);  // Cambia el estado del LED
-                HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta Abierta\r\n", 17, 100);
+                HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta Abierta\r\n", 16, 100);
                 OLED_Printer(rb, buffer, state);
               strcpy(state, "Op");
           }
@@ -195,11 +195,11 @@ void process_command(ring_buffer_t *rb, uint8_t *buffer, char *state) {
 
       else if (strcmp((char *)buffer, "#*C*#") == 0) {
           if (strcmp(state, "Cl") == 0) {
-              HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta ya esta cerrada\r\n", 27, 100);
+              HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta ya esta cerrada\r\n", 24, 100);
               OLED_Printer(rb, buffer, state);
           } else {
               HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);  // Cambia el estado del LED
-              HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta Cerrada\r\n", 17, 100);
+              HAL_UART_Transmit(&huart2, (uint8_t *)"Puerta Cerrada\r\n", 16, 100);
               OLED_Printer(rb, buffer, state);
               strcpy(state, "Cl");
           }
@@ -207,22 +207,22 @@ void process_command(ring_buffer_t *rb, uint8_t *buffer, char *state) {
 
       else if (strcmp((char *)buffer, "#*1*#") == 0) {
           if (strcmp(state, "Cl") == 0) {
-              HAL_UART_Transmit(&huart2, (uint8_t *)"Estado de la puerta:Cerrada\r\n", 36, 100);
+              HAL_UART_Transmit(&huart2, (uint8_t *)"Estado de la puerta:Cerrada\r\n", 28, 100);
               ssd1306_Fill(Black);
               ssd1306_SetCursor(0, 0);
               ssd1306_WriteString((char *)"Door state:Cl", Font_7x10, White);
               ssd1306_UpdateScreen();
-              //HAL_Delay(5000); 
+              HAL_Delay(5000); 
               ssd1306_Fill(Black);
               ssd1306_DrawBitmap(0, 0, locked, 128, 64, White);
               ssd1306_UpdateScreen();
           } else {
-              HAL_UART_Transmit(&huart2, (uint8_t *)"Estado de la puerta:Abierta\r\n", 36, 100);
+              HAL_UART_Transmit(&huart2, (uint8_t *)"Estado de la puerta:Abierta\r\n", 28, 100);
               ssd1306_Fill(Black);
               ssd1306_SetCursor(0, 0);
               ssd1306_WriteString((char *)"Door state:Op", Font_7x10, White);
               ssd1306_UpdateScreen();
-              //HAL_Delay(5000); 
+              HAL_Delay(5000); 
               ssd1306_Fill(Black);
               ssd1306_DrawBitmap(0, 0, unlocked, 128, 64, White);
               ssd1306_UpdateScreen();
@@ -230,7 +230,7 @@ void process_command(ring_buffer_t *rb, uint8_t *buffer, char *state) {
       } 
 
       else if (strcmp((char *)buffer, "#*0*#") == 0) {
-          HAL_UART_Transmit(&huart2, (uint8_t *)"Buffer limpiado y puerta cerrada\r\n", 38, 100);
+          HAL_UART_Transmit(&huart2, (uint8_t *)"Buffer limpiado y puerta cerrada\r\n", 34, 100);
           ring_buffer_reset(rb);
           OLED_Printer(rb, buffer, state);
           strcpy(state, "Cl");
@@ -244,13 +244,13 @@ void process_command(ring_buffer_t *rb, uint8_t *buffer, char *state) {
       } 
 
       else {
-          HAL_UART_Transmit(&huart2, (uint8_t *)"Comando no reconocido\r\n", 24, 100);
+          HAL_UART_Transmit(&huart2, (uint8_t *)"Comando no reconocido\r\n", 23, 100);
           if (strcmp(state, "Cl") == 0) {
               ssd1306_Fill(Black);
               ssd1306_SetCursor(0, 0);
               ssd1306_WriteString((char *)"Comand unknown", Font_7x10, White);
               ssd1306_UpdateScreen();
-              //HAL_Delay(5000); 
+              HAL_Delay(2000); 
               ssd1306_Fill(Black);
               ssd1306_DrawBitmap(0, 0, locked, 128, 64, White);
               ssd1306_UpdateScreen();
@@ -259,7 +259,7 @@ void process_command(ring_buffer_t *rb, uint8_t *buffer, char *state) {
               ssd1306_SetCursor(0, 0);
               ssd1306_WriteString((char *)"Comand unknown", Font_7x10, White);
               ssd1306_UpdateScreen();
-              //HAL_Delay(5000); 
+              HAL_Delay(2000); 
               ssd1306_Fill(Black);
               ssd1306_DrawBitmap(0, 0, unlocked, 128, 64, White);
               ssd1306_UpdateScreen();
@@ -268,7 +268,7 @@ void process_command(ring_buffer_t *rb, uint8_t *buffer, char *state) {
 
       // Reinicia el buffer de comando
       for (int i = 0; i < 5; i++) {
-          //buffer[i] = '_';
+          buffer[i] = '_';
       }
   }
 }
@@ -340,17 +340,18 @@ int main(void)
   ring_buffer_init(&rb_matrix, buffer_matrix, 5);  // Inicializa el ring buffer
   ring_buffer_init(&rb_pc, buffer_pc, 5);
   ring_buffer_init(&rb_internet, buffer_internet, 5);
-  HAL_UART_Transmit(&huart2, (uint8_t *)"Hello World\r\n", 15, 100);  // Envía el mensaje "Hello World"
-  HAL_UART_Transmit_IT(&huart3, (uint8_t *)"Hello World\r\n", 15);  // Envía el mensaje "Hello World"
-  HAL_Delay(100); //
+  HAL_UART_Transmit(&huart2, (uint8_t *)"Hello World\r\n", 13, 100);  // Envía el mensaje "Hello World"
+  HAL_UART_Transmit_IT(&huart3, (uint8_t *)"Hello World\r\n", 13);  // Envía el mensaje "Hello World"
   ssd1306_WriteString("Door default: Cl", Font_7x10, White);
   ssd1306_UpdateScreen();
-  //HAL_Delay(5000); //
+  HAL_Delay(1000); 
   ssd1306_Fill(Black);
   ssd1306_DrawBitmap(0, 0, locked, 128, 64, White);
   ssd1306_UpdateScreen();
   uint8_t key;  // Variable para almacenar la tecla presionada desde el teclado matricial
   char state[3] = "Cl";
+  control_uart3 = false;
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -368,33 +369,32 @@ int main(void)
           ring_buffer_write(&rb_matrix, key);
           uint8_t size = ring_buffer_size(&rb_matrix);
           printf("Key: %c, Buffer: %s, Size: %d\r\n", key, buffer_matrix, size);
-          //char msg[45];
-          //snprintf(msg, sizeof(msg), "Key: %c, Buffer: %s, Size: %d\r\n", key, buffer_matrix, size);
-          //HAL_UART_Transmit(&huart2, (uint8_t *)msg, strlen(msg), 100);
+          char msg[45];
+          snprintf(msg, sizeof(msg), "Key: %c, Buffer: %s, Size: %d\r\n", key, buffer_matrix, size);
+          HAL_UART_Transmit(&huart2, (uint8_t *)msg, strlen(msg), 100);
+
+
       }
     }
 
     // Procesa teclas recibidas desde la PC
     if(control_uart2)
-    {
+    {     
       control_uart2 = false;
-      HAL_UART_Receive_IT(&huart2, buffer_pc , 5);
       ring_buffer_write(&rb_pc, buffer_pc[0]);
       ring_buffer_write(&rb_pc, buffer_pc[1]);
       ring_buffer_write(&rb_pc, buffer_pc[2]);
       ring_buffer_write(&rb_pc, buffer_pc[3]);
       ring_buffer_write(&rb_pc, buffer_pc[4]);
       uint8_t size = ring_buffer_size(&rb_pc);
-      char msg2[45];
-      snprintf(msg2, sizeof(msg2), "Buffer: %s, Size: %d\r\n",buffer_pc, size);
-      HAL_UART_Transmit(&huart2, (uint8_t *)msg2, strlen(msg2), 100);
+      printf("Buffer: %s, Size: %d\r\n",buffer_pc, size);
       process_command(&rb_pc, buffer_pc, state);
+
 
     }
     if(control_uart3)
     {
       control_uart3 = false;
-      HAL_UART_Receive_IT(&huart3, buffer_internet , 5);
       ring_buffer_write(&rb_internet, buffer_internet[0]);
       ring_buffer_write(&rb_internet, buffer_internet[1]);
       ring_buffer_write(&rb_internet, buffer_internet[2]);
@@ -402,12 +402,12 @@ int main(void)
       ring_buffer_write(&rb_internet, buffer_internet[4]);
       uint8_t size = ring_buffer_size(&rb_internet);
       printf("Buffer: %s, Size: %d\r\n",buffer_internet, size);
-      //HAL_UART_Transmit(&huart2, (uint8_t *)msg3, strlen(msg3), 100);
       process_command(&rb_internet, buffer_internet, state);
+
     }
-   // Procesa comandos para ambos buffers
+    HAL_UART_Receive_IT(&huart2, buffer_pc , 5);
+    HAL_UART_Receive_IT(&huart3, buffer_internet , 5);
     process_command(&rb_matrix, buffer_matrix, state);
-    //process_command(&rb_pc, buffer_pc, state);
 
     HAL_Delay(100);
   }
