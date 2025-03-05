@@ -55,7 +55,24 @@ UART_HandleTypeDef huart2;
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
+ring_buffer_t rb_matrix;
+ring_buffer_t rb_pc;
+ring_buffer_t rb_internet;
 
+uint8_t buffer_matrix[5];  // Buffer de tamaño 10 para almacenar el comando completo
+uint8_t buffer_pc[5];
+uint8_t buffer_internet[5];
+
+uint32_t key_pressed_tick = 0;
+uint16_t column_pressed = 0;
+
+uint32_t debounce_tick = 0;
+bool control_uart2 = false;
+bool control_uart3 = false;
+uint8_t key;
+
+extern char state[3];
+char state[3] = "Cl";
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -70,12 +87,6 @@ static void MX_I2C1_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-uint32_t key_pressed_tick = 0;
-uint16_t column_pressed = 0;
-
-uint32_t debounce_tick = 0;
-bool control_uart2 = false;
-bool control_uart3 = false;
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
@@ -98,6 +109,56 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
     // HAL_UART_Transmit(&huart2, huart->pRxBuffPtr, huart->RxXferSize, 1000);
     control_uart3 = true;  
 
+  }
+}
+
+void low_power_sleep_mode(void) {
+  HAL_SuspendTick(); // Detener el SysTick para reducir consumo
+  HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+  HAL_ResumeTick(); // Restaurar el SysTick después de salir del Sleep Mode
+}
+
+
+int system_events_handler(char *event)
+{
+  if (strcmp(event, "Op") == 0) {
+    return 2;
+  }
+  else if (strcmp(event, "To") == 0) {
+    return 1;
+  }
+  else if (strcmp(event, "Cl") == 0) {
+    return 0;
+  }
+  return -1; // Return a default value if no condition is met
+}
+
+void heartbeat(void)
+{
+  static uint32_t last_heartbeat = 0;
+  if (HAL_GetTick() - last_heartbeat > 1000)
+  {
+    last_heartbeat = HAL_GetTick();
+    HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin);
+  }
+}
+
+void system_state_machine(char *states)
+{
+  int state = system_events_handler(states);
+  switch (state)
+  {
+    case 0: // Door closed
+      //HAL_UART_Transmit(&huart2, (uint8_t *)"Door closed\r\n", 13, 100);
+      break;
+    case 1: // Door temporarily opened;
+      //HAL_UART_Transmit(&huart2, (uint8_t *)"Door temporarily opened\r\n", 25, 100);
+      break;
+    case 2: // Door permanent opened
+       //HAL_UART_Transmit(&huart2, (uint8_t *)"Door opened\r\n", 13, 100);
+      break;
+    default:
+      break;
   }
 }
 
@@ -316,18 +377,11 @@ int main(void)
   MX_USART3_UART_Init();
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
-  initialise_monitor_handles();  // Inicializa el monitor de depuración
   setvbuf(stdout, NULL, _IONBF, 0);  // Desactiva el buffer de stdout
   ssd1306_Init();
   ssd1306_Fill(Black);
   ssd1306_UpdateScreen();
-  ring_buffer_t rb_matrix;
-  ring_buffer_t rb_pc;
-  ring_buffer_t rb_internet;
 
-  uint8_t buffer_matrix[5];  // Buffer de tamaño 10 para almacenar el comando completo
-  uint8_t buffer_pc[5];
-  uint8_t buffer_internet[5];
 
   for (int i = 0; i < sizeof(buffer_matrix); i++) {
     buffer_matrix[i] = '_';
@@ -348,16 +402,13 @@ int main(void)
   ssd1306_Fill(Black);
   ssd1306_DrawBitmap(0, 0, locked, 128, 64, White);
   ssd1306_UpdateScreen();
-  uint8_t key;  // Variable para almacenar la tecla presionada desde el teclado matricial
-  char state[3] = "Cl";
-  control_uart3 = false;
-
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    heartbeat();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -401,7 +452,7 @@ int main(void)
       ring_buffer_write(&rb_internet, buffer_internet[3]);
       ring_buffer_write(&rb_internet, buffer_internet[4]);
       uint8_t size = ring_buffer_size(&rb_internet);
-      printf("Buffer: %s, Size: %d\r\n",buffer_internet, size);
+      printf("\rBuffer: %s, Size: %d\r\n",buffer_internet, size);
       process_command(&rb_internet, buffer_internet, state);
 
     }
@@ -599,7 +650,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, LD2_Pin|LD1_Pin|ROW_1_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, LD2_Pin|ROW_1_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, ROW_2_Pin|ROW_4_Pin|ROW_3_Pin, GPIO_PIN_RESET);
@@ -610,12 +661,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : LD2_Pin LD1_Pin */
-  GPIO_InitStruct.Pin = LD2_Pin|LD1_Pin;
+  /*Configure GPIO pin : LD2_Pin */
+  GPIO_InitStruct.Pin = LD2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : COLUMN_1_Pin */
   GPIO_InitStruct.Pin = COLUMN_1_Pin;
