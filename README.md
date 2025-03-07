@@ -1,3 +1,3 @@
 # Proyecto_Final_Control_De_Compuertas
  
-[image](image.jpg)
+![Diagrama](https://github.com/sillHD/Proyecto_Final_Control_De_Compuertas/blob/main/image.jpg)
